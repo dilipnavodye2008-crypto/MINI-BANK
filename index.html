@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MY Mini Bank</title>
+
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="MY Mini Bank">
+
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" rel="stylesheet">
+
+<style>
+body {
+  margin: 0;
+  font-family: 'Poppins', sans-serif;
+  background: #000;
+  color: white;
+}
+
+.container {
+  max-width: 420px;
+  margin: auto;
+  padding: 20px;
+}
+
+.header {
+  text-align: center;
+  margin-bottom: 10px;
+}
+
+.date {
+  font-size: 14px;
+  color: #f5c400;
+}
+
+.card {
+  background: #111;
+  border-radius: 16px;
+  padding: 20px;
+  margin-bottom: 15px;
+}
+
+.usd {
+  font-size: 32px;
+  font-weight: 700;
+  color: #00aaff;
+}
+
+.lkr {
+  font-size: 18px;
+  color: #f5c400;
+}
+
+input, button {
+  width: 100%;
+  padding: 12px;
+  margin-top: 10px;
+  font-size: 16px;
+  border-radius: 10px;
+  border: none;
+}
+
+button {
+  background: #0070ff;
+  color: white;
+}
+
+button.red {
+  background: #d93025;
+}
+
+button.small {
+  padding: 8px;
+  font-size: 14px;
+  margin-top: 6px;
+}
+
+.history {
+  max-height: 140px;
+  overflow-y: auto;
+}
+
+.history-item {
+  display: flex;
+  justify-content: space-between;
+  border-bottom: 1px solid #333;
+  font-size: 14px;
+  padding: 4px 0;
+}
+
+canvas {
+  width: 100%;
+  height: 150px;
+}
+
+.lock {
+  position: fixed;
+  inset: 0;
+  background: black;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.lock-box {
+  background: #111;
+  padding: 25px;
+  border-radius: 16px;
+  width: 280px;
+}
+</style>
+</head>
+
+<body>
+
+<div id="lock" class="lock">
+  <div class="lock-box">
+    <h3>🔒 MY Mini Bank</h3>
+    <input type="password" id="pass">
+    <button onclick="unlock()">Unlock</button>
+  </div>
+</div>
+
+<div class="container">
+
+<div class="header">
+  <h2>🏦 MY Mini Bank</h2>
+  <div class="date" id="today"></div>
+</div>
+
+<div class="card">
+  <div class="usd">USD <span id="usd">0.00</span></div>
+  <div class="lkr">LKR <span id="lkr">0.00</span></div>
+  <div class="date">Rate: <span id="rate">...</span></div>
+</div>
+
+<div class="card">
+  <input type="number" id="amount" placeholder="Enter amount (LKR)">
+  <button onclick="add()">➕ Add</button>
+  <button class="small red" onclick="undo()">↩ Undo Last</button>
+</div>
+
+<div class="card">
+  <h4>📊 Monthly Savings</h4>
+  <canvas id="chart"></canvas>
+</div>
+
+<div class="card">
+  <h4>📅 History</h4>
+  <div class="history" id="history"></div>
+</div>
+
+<div class="card">
+  <h4>⚙ Advanced Settings</h4>
+  <input type="password" id="newPass" placeholder="New Passcode">
+  <button onclick="changePass()">Change Passcode</button>
+</div>
+
+</div>
+
+<script>
+/* ===== PASSCODE ===== */
+if (!localStorage.pass) localStorage.pass = "1234";
+function unlock() {
+  if (pass.value === localStorage.pass) {
+    lock.style.display = "none";
+  } else alert("Wrong passcode");
+}
+
+/* ===== DATE ===== */
+today.innerText = new Date().toDateString();
+
+/* ===== DATA ===== */
+let total = +localStorage.total || 0;
+let history = JSON.parse(localStorage.history || "[]");
+let rate = 300;
+
+/* ===== EXCHANGE RATE AUTO ===== */
+fetch("https://api.exchangerate.host/latest?base=LKR&symbols=USD")
+.then(r => r.json())
+.then(d => {
+  rate = 1 / d.rates.USD;
+  rateSpan();
+  update();
+});
+
+function rateSpan() {
+  rateEl.innerText = rate.toFixed(2);
+}
+
+const rateEl = document.getElementById("rate");
+
+/* ===== ACTIONS ===== */
+function add() {
+  let v = +amount.value;
+  if (!v) return;
+  total += v;
+  history.unshift({ d: new Date().toLocaleDateString(), v });
+  save();
+}
+
+function undo() {
+  if (!history.length) return;
+  let last = history.shift();
+  total -= last.v;
+  save();
+}
+
+function changePass() {
+  if (newPass.value.length < 4) return alert("Min 4 digits");
+  localStorage.pass = newPass.value;
+  alert("Passcode changed");
+  newPass.value = "";
+}
+
+/* ===== SAVE & UI ===== */
+function save() {
+  localStorage.total = total;
+  localStorage.history = JSON.stringify(history);
+  amount.value = "";
+  update();
+}
+
+function update() {
+  lkr.innerText = total.toFixed(2);
+  usd.innerText = (total / rate).toFixed(2);
+  renderHistory();
+  drawChart();
+}
+
+function renderHistory() {
+  historyDiv.innerHTML = "";
+  history.slice(0, 30).forEach(h => {
+    let div = document.createElement("div");
+    div.className = "history-item";
+    div.innerHTML = `<span>${h.d}</span><span>${h.v} LKR</span>`;
+    historyDiv.appendChild(div);
+  });
+}
+
+const historyDiv = document.getElementById("history");
+
+/* ===== GRAPH ===== */
+function drawChart() {
+  const ctx = chart.getContext("2d");
+  ctx.clearRect(0,0,300,150);
+  ctx.strokeStyle = "#f5c400";
+  ctx.beginPath();
+  let data = history.slice(0,30).reverse();
+  data.forEach((h,i)=>{
+    ctx.lineTo(i*10,150 - h.v/5);
+  });
+  ctx.stroke();
+}
+
+update();
+</script>
+
+</body>
+</html>
